@@ -27,6 +27,18 @@ actor {
     };
   };
 
+  // Claim admin with hardcoded token (bypasses env var issues)
+  // This allows any principal with the correct token to become admin,
+  // even if someone else already claimed it (replaces previous admin).
+  public shared ({ caller }) func claimAdminWithToken(token : Text) : async Bool {
+    if (caller.isAnonymous()) { return false };
+    let expected = "Apple$12";
+    if (token != expected) { return false };
+    accessControlState.userRoles.add(caller, #admin);
+    accessControlState.adminAssigned := true;
+    true;
+  };
+
   // User Profile Management
   public type UserProfile = {
     name : Text;
@@ -46,6 +58,14 @@ actor {
       Runtime.trap("Unauthorized: Can only view your own profile or must be admin");
     };
     userProfiles.get(user);
+  };
+
+  // Get all user profiles (admin only)
+  public query ({ caller }) func getAllUserProfiles() : async [(Principal, UserProfile)] {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can view all profiles");
+    };
+    userProfiles.entries().toArray();
   };
 
   // Save current user's profile

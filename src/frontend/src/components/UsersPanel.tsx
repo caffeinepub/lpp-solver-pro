@@ -22,6 +22,7 @@ export default function UsersPanel({ onClose }: UsersPanelProps) {
   const { actor: backend } = useActor();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [users, setUsers] = useState<UserActivity[]>([]);
+  const [emailMap, setEmailMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
@@ -29,13 +30,24 @@ export default function UsersPanel({ onClose }: UsersPanelProps) {
     if (!backend) return;
     setLoading(true);
     try {
-      const [adminCheck, allUsers] = await Promise.all([
+      const [adminCheck, allUsers, profiles] = await Promise.all([
         backend.isCallerAdmin(),
         backend.getAllUserActivity(),
+        (backend as any).getAllUserProfiles() as Promise<
+          Array<
+            [
+              import("@icp-sdk/core/principal").Principal,
+              import("./../backend.d").UserProfile,
+            ]
+          >
+        >,
       ]);
       setIsAdmin(adminCheck);
       if (adminCheck) {
         setUsers(allUsers);
+        setEmailMap(
+          new Map(profiles.map(([p, prof]) => [p.toString(), prof.email])),
+        );
         setLastRefresh(new Date());
       }
     } catch {
@@ -179,6 +191,9 @@ export default function UsersPanel({ onClose }: UsersPanelProps) {
                     <TableRow className="bg-muted/30">
                       <TableHead className="w-8">#</TableHead>
                       <TableHead>Principal</TableHead>
+                      <TableHead className="hidden sm:table-cell">
+                        Email
+                      </TableHead>
                       <TableHead className="hidden md:table-cell">
                         First Seen
                       </TableHead>
@@ -205,7 +220,7 @@ export default function UsersPanel({ onClose }: UsersPanelProps) {
                     {users.length === 0 ? (
                       <TableRow data-ocid="users.empty_state">
                         <TableCell
-                          colSpan={10}
+                          colSpan={11}
                           className="text-center text-muted-foreground py-8"
                         >
                           No users tracked yet.
@@ -224,6 +239,9 @@ export default function UsersPanel({ onClose }: UsersPanelProps) {
                             </TableCell>
                             <TableCell className="font-mono text-xs">
                               {truncatePrincipal(u.principal)}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                              {emailMap.get(u.principal.toString()) || "\u2014"}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                               {formatTimestamp(u.firstSeen)}

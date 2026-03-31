@@ -67,10 +67,12 @@ export enum UserRole {
 }
 export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
+    claimAdminWithToken(token: string): Promise<boolean>;
     createProblem(name: string, objective: Array<Variable>, isMaximize: boolean, constraints: Array<Constraint>): Promise<bigint>;
     deleteProblem(problemId: bigint): Promise<boolean>;
     getAllFeedback(): Promise<Array<FeedbackEntry>>;
     getAllUserActivity(): Promise<Array<UserActivity>>;
+    getAllUserProfiles(): Promise<Array<[Principal, UserProfile]>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getFeedbackStats(): Promise<FeedbackStats>;

@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   KeyRound,
+  Loader2,
   LogOut,
   MessageSquareHeart,
   Shield,
@@ -26,6 +27,7 @@ import {
 import { useEffect, useState } from "react";
 import AdminPanel from "./components/AdminPanel";
 import AuthScreen from "./components/AuthScreen";
+import EmailSetupScreen from "./components/EmailSetupScreen";
 import FeedbackForm from "./components/FeedbackForm";
 import InputForm, { type InputFormState } from "./components/InputForm";
 import ProblemHistory from "./components/ProblemHistory";
@@ -74,6 +76,10 @@ export default function App() {
   const [claimToken, setClaimToken] = useState("");
   const [claimLoading, setClaimLoading] = useState(false);
 
+  // Profile / email setup state
+  const [profileChecked, setProfileChecked] = useState(false);
+  const [hasProfile, setHasProfile] = useState(false);
+
   // Restore-from-history state
   const [formKey, setFormKey] = useState(0);
   const [initialInputState, setInitialInputState] = useState<
@@ -114,6 +120,22 @@ export default function App() {
     }
   }, [backend, identity]);
 
+  // Check if user has a profile (first-login detection)
+  useEffect(() => {
+    if (!backend || !identity) return;
+    backend
+      .getCallerUserProfile()
+      .then((profile) => {
+        setHasProfile(profile !== null);
+        setProfileChecked(true);
+      })
+      .catch(() => {
+        // On error, skip email setup to avoid blocking access
+        setHasProfile(true);
+        setProfileChecked(true);
+      });
+  }, [backend, identity]);
+
   // ─── Auth gate ───────────────────────────────────────────────────────────
   if (isInitializing || !identity) {
     return (
@@ -123,6 +145,26 @@ export default function App() {
         isInitializing={isInitializing}
       />
     );
+  }
+
+  // ─── Profile check loading ────────────────────────────────────────────────
+  if (!profileChecked) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 via-background to-blue-50"
+        data-ocid="profile-check.loading_state"
+      >
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <p className="text-muted-foreground text-sm font-medium">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Email setup for first-time users ────────────────────────────────────
+  if (!hasProfile) {
+    return <EmailSetupScreen onComplete={() => setHasProfile(true)} />;
   }
 
   // ─── Solver handlers ─────────────────────────────────────────────────────
@@ -324,9 +366,12 @@ export default function App() {
                 if (!backend) return;
                 setClaimLoading(true);
                 try {
-                  await backend._initializeAccessControlWithSecret(claimToken);
-                  const adminNow = await backend.isCallerAdmin();
-                  setIsAdmin(adminNow);
+                  const success = await (backend as any).claimAdminWithToken(
+                    claimToken,
+                  );
+                  if (!success)
+                    throw new Error("Invalid token or claim failed");
+                  setIsAdmin(true);
                   setShowClaimAdmin(false);
                   setClaimToken("");
                 } catch {
