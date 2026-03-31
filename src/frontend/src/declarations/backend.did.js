@@ -22,9 +22,34 @@ export const Constraint = IDL.Record({
   'operator' : IDL.Text,
   'variables' : IDL.Vec(Variable),
 });
+export const FeedbackEntry = IDL.Record({
+  'id' : IDL.Nat,
+  'principal' : IDL.Principal,
+  'name' : IDL.Opt(IDL.Text),
+  'email' : IDL.Opt(IDL.Text),
+  'comment' : IDL.Text,
+  'timestamp' : IDL.Int,
+  'problemContext' : IDL.Text,
+  'rating' : IDL.Nat,
+});
+export const UserActivity = IDL.Record({
+  'firstSeen' : IDL.Int,
+  'principal' : IDL.Principal,
+  'visitCount' : IDL.Nat,
+  'solveCount' : IDL.Nat,
+  'lastLogin' : IDL.Int,
+  'dualSimplexCount' : IDL.Nat,
+  'location' : IDL.Text,
+  'simplexCount' : IDL.Nat,
+  'cuttingPlaneCount' : IDL.Nat,
+});
 export const UserProfile = IDL.Record({
   'name' : IDL.Text,
   'email' : IDL.Text,
+});
+export const FeedbackStats = IDL.Record({
+  'totalCount' : IDL.Nat,
+  'averageRating' : IDL.Float64,
 });
 export const LPProblem = IDL.Record({
   'id' : IDL.Nat,
@@ -51,10 +76,18 @@ export const idlService = IDL.Service({
       [],
     ),
   'deleteProblem' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+  'getAllFeedback' : IDL.Func([], [IDL.Vec(FeedbackEntry)], ['query']),
+  'getAllUserActivity' : IDL.Func([], [IDL.Vec(UserActivity)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+  'getFeedbackStats' : IDL.Func([], [FeedbackStats], ['query']),
   'getProblem' : IDL.Func([IDL.Nat], [IDL.Opt(LPProblem)], ['query']),
   'getSolution' : IDL.Func([IDL.Nat], [IDL.Opt(LPPSolution)], ['query']),
+  'getUserActivity' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Opt(UserActivity)],
+      ['query'],
+    ),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfile)],
@@ -63,8 +96,15 @@ export const idlService = IDL.Service({
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'listAllProblems' : IDL.Func([], [IDL.Vec(LPProblem)], ['query']),
   'listMyProblems' : IDL.Func([], [IDL.Vec(LPProblem)], ['query']),
+  'recordLogin' : IDL.Func([IDL.Text], [], []),
+  'recordSolve' : IDL.Func([IDL.Text], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'solveProblem' : IDL.Func([IDL.Nat], [IDL.Opt(LPPSolution)], []),
+  'submitFeedback' : IDL.Func(
+      [IDL.Opt(IDL.Text), IDL.Opt(IDL.Text), IDL.Nat, IDL.Text, IDL.Text],
+      [IDL.Nat],
+      [],
+    ),
 });
 
 export const idlInitArgs = [];
@@ -84,7 +124,32 @@ export const idlFactory = ({ IDL }) => {
     'operator' : IDL.Text,
     'variables' : IDL.Vec(Variable),
   });
+  const FeedbackEntry = IDL.Record({
+    'id' : IDL.Nat,
+    'principal' : IDL.Principal,
+    'name' : IDL.Opt(IDL.Text),
+    'email' : IDL.Opt(IDL.Text),
+    'comment' : IDL.Text,
+    'timestamp' : IDL.Int,
+    'problemContext' : IDL.Text,
+    'rating' : IDL.Nat,
+  });
+  const UserActivity = IDL.Record({
+    'firstSeen' : IDL.Int,
+    'principal' : IDL.Principal,
+    'visitCount' : IDL.Nat,
+    'solveCount' : IDL.Nat,
+    'lastLogin' : IDL.Int,
+    'dualSimplexCount' : IDL.Nat,
+    'location' : IDL.Text,
+    'simplexCount' : IDL.Nat,
+    'cuttingPlaneCount' : IDL.Nat,
+  });
   const UserProfile = IDL.Record({ 'name' : IDL.Text, 'email' : IDL.Text });
+  const FeedbackStats = IDL.Record({
+    'totalCount' : IDL.Nat,
+    'averageRating' : IDL.Float64,
+  });
   const LPProblem = IDL.Record({
     'id' : IDL.Nat,
     'constraints' : IDL.Vec(Constraint),
@@ -110,10 +175,18 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'deleteProblem' : IDL.Func([IDL.Nat], [IDL.Bool], []),
+    'getAllFeedback' : IDL.Func([], [IDL.Vec(FeedbackEntry)], ['query']),
+    'getAllUserActivity' : IDL.Func([], [IDL.Vec(UserActivity)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+    'getFeedbackStats' : IDL.Func([], [FeedbackStats], ['query']),
     'getProblem' : IDL.Func([IDL.Nat], [IDL.Opt(LPProblem)], ['query']),
     'getSolution' : IDL.Func([IDL.Nat], [IDL.Opt(LPPSolution)], ['query']),
+    'getUserActivity' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Opt(UserActivity)],
+        ['query'],
+      ),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfile)],
@@ -122,8 +195,15 @@ export const idlFactory = ({ IDL }) => {
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'listAllProblems' : IDL.Func([], [IDL.Vec(LPProblem)], ['query']),
     'listMyProblems' : IDL.Func([], [IDL.Vec(LPProblem)], ['query']),
+    'recordLogin' : IDL.Func([IDL.Text], [], []),
+    'recordSolve' : IDL.Func([IDL.Text], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'solveProblem' : IDL.Func([IDL.Nat], [IDL.Opt(LPPSolution)], []),
+    'submitFeedback' : IDL.Func(
+        [IDL.Opt(IDL.Text), IDL.Opt(IDL.Text), IDL.Nat, IDL.Text, IDL.Text],
+        [IDL.Nat],
+        [],
+      ),
   });
 };
 

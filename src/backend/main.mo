@@ -7,11 +7,25 @@ import Array "mo:core/Array";
 import Float "mo:core/Float";
 import Text "mo:core/Text";
 import Time "mo:core/Time";
+import Iter "mo:core/Iter";
+import Nat "mo:core/Nat";
+import Int "mo:core/Int";
 
 actor {
   // Authentication system state
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
+
+  // Auto-register a caller as a user if they have no role yet
+  func ensureRegistered(caller : Principal) {
+    if (caller.isAnonymous()) { return };
+    switch (accessControlState.userRoles.get(caller)) {
+      case (?_) {}; // already registered
+      case (null) {
+        accessControlState.userRoles.add(caller, #user);
+      };
+    };
+  };
 
   // User Profile Management
   public type UserProfile = {
@@ -23,9 +37,6 @@ actor {
 
   // Get current user's profile
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view profiles");
-    };
     userProfiles.get(caller);
   };
 
@@ -39,9 +50,7 @@ actor {
 
   // Save current user's profile
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
-    };
+    ensureRegistered(caller);
     userProfiles.add(caller, profile);
   };
 
@@ -61,7 +70,7 @@ actor {
     id : Nat;
     owner : Principal;
     name : Text;
-    objective : [Variable]; // Objective function to maximize/minimize
+    objective : [Variable];
     isMaximize : Bool;
     constraints : [Constraint];
     createdAt : Int;
@@ -69,7 +78,7 @@ actor {
 
   public type LPPSolution = {
     problemId : Nat;
-    status : Text; // "optimal", "infeasible", "unbounded"
+    status : Text;
     objectiveValue : ?Float;
     variables : [(Text, Float)];
   };
@@ -78,20 +87,15 @@ actor {
   let problems = Map.empty<Nat, LPProblem>();
   let solutions = Map.empty<Nat, LPPSolution>();
 
-  // Create a new LP problem (users only)
   public shared ({ caller }) func createProblem(
     name : Text,
     objective : [Variable],
     isMaximize : Bool,
     constraints : [Constraint],
   ) : async Nat {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can create problems");
-    };
-
+    ensureRegistered(caller);
     let problemId = nextProblemId;
     nextProblemId += 1;
-
     let problem : LPProblem = {
       id = problemId;
       owner = caller;
@@ -101,17 +105,11 @@ actor {
       constraints = constraints;
       createdAt = Time.now();
     };
-
     problems.add(problemId, problem);
     problemId;
   };
 
-  // Get a problem (owner or admin only)
   public query ({ caller }) func getProblem(problemId : Nat) : async ?LPProblem {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view problems");
-    };
-
     switch (problems.get(problemId)) {
       case null { null };
       case (?problem) {
@@ -123,59 +121,39 @@ actor {
     };
   };
 
-  // List all problems for current user
   public query ({ caller }) func listMyProblems() : async [LPProblem] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can list problems");
-    };
-
-    let userProblems = problems.values().toArray().filter(
+    problems.values().toArray().filter(
       func(p : LPProblem) : Bool { p.owner == caller }
     );
-    userProblems;
   };
 
-  // List all problems (admin only)
   public query ({ caller }) func listAllProblems() : async [LPProblem] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Only admins can list all problems");
     };
     problems.values().toArray();
   };
 
-  // Solve a problem (owner or admin only)
   public shared ({ caller }) func solveProblem(problemId : Nat) : async ?LPPSolution {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can solve problems");
-    };
-
     switch (problems.get(problemId)) {
       case null { null };
       case (?problem) {
         if (problem.owner != caller and not AccessControl.isAdmin(accessControlState, caller)) {
           Runtime.trap("Unauthorized: Can only solve your own problems or must be admin");
         };
-
-        // Simplified solver (placeholder - real implementation would use simplex algorithm)
         let solution : LPPSolution = {
           problemId = problemId;
           status = "optimal";
           objectiveValue = ?0.0;
           variables = [];
         };
-
         solutions.add(problemId, solution);
         ?solution;
       };
     };
   };
 
-  // Get solution (owner or admin only)
   public query ({ caller }) func getSolution(problemId : Nat) : async ?LPPSolution {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view solutions");
-    };
-
     switch (problems.get(problemId)) {
       case null { null };
       case (?problem) {
@@ -187,12 +165,7 @@ actor {
     };
   };
 
-  // Delete a problem (owner or admin only)
   public shared ({ caller }) func deleteProblem(problemId : Nat) : async Bool {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can delete problems");
-    };
-
     switch (problems.get(problemId)) {
       case null { false };
       case (?problem) {
@@ -204,5 +177,170 @@ actor {
         true;
       };
     };
+  };
+
+  // Feedback System
+  public type FeedbackEntry = {
+    id : Nat;
+    principal : Principal;
+    name : ?Text;
+    email : ?Text;
+    rating : Nat;
+    comment : Text;
+    timestamp : Int;
+    problemContext : Text;
+  };
+
+  var nextFeedbackId : Nat = 0;
+  let feedbackEntries = Map.empty<Nat, FeedbackEntry>();
+
+  public shared ({ caller }) func submitFeedback(
+    name : ?Text,
+    email : ?Text,
+    rating : Nat,
+    comment : Text,
+    problemContext : Text,
+  ) : async Nat {
+    ensureRegistered(caller);
+    if (rating == 0 or rating > 5) {
+      Runtime.trap("Rating must be between 1 and 5");
+    };
+    let feedbackId = nextFeedbackId;
+    nextFeedbackId += 1;
+    let entry : FeedbackEntry = {
+      id = feedbackId;
+      principal = caller;
+      name;
+      email;
+      rating;
+      comment;
+      timestamp = Time.now();
+      problemContext;
+    };
+    feedbackEntries.add(feedbackId, entry);
+    feedbackId;
+  };
+
+  public query ({ caller }) func getAllFeedback() : async [FeedbackEntry] {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can view all feedback");
+    };
+    feedbackEntries.values().toArray();
+  };
+
+  public type FeedbackStats = {
+    totalCount : Nat;
+    averageRating : Float;
+  };
+
+  public query ({ caller }) func getFeedbackStats() : async FeedbackStats {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can view feedback stats");
+    };
+    let feedbackArray = feedbackEntries.values().toArray();
+    let count = feedbackArray.size();
+    if (count == 0) {
+      return { totalCount = 0; averageRating = 0.0 };
+    };
+    let sum = feedbackArray.foldLeft(
+      0,
+      func(acc : Nat, entry : FeedbackEntry) : Nat { acc + entry.rating },
+    );
+    {
+      totalCount = count;
+      averageRating = sum.toFloat() / count.toInt().toFloat();
+    };
+  };
+
+  // User Activity Tracking
+  public type UserActivity = {
+    principal : Principal;
+    firstSeen : Int;
+    lastLogin : Int;
+    visitCount : Nat;
+    location : Text;
+    solveCount : Nat;
+    simplexCount : Nat;
+    dualSimplexCount : Nat;
+    cuttingPlaneCount : Nat;
+  };
+
+  let userActivity = Map.empty<Principal, UserActivity>();
+
+  // Called whenever a user logs in — auto-registers the user
+  public shared ({ caller }) func recordLogin(location : Text) : async () {
+    if (caller.isAnonymous()) { return };
+    ensureRegistered(caller);
+    let now = Time.now();
+    switch (userActivity.get(caller)) {
+      case (null) {
+        userActivity.add(caller, {
+          principal = caller;
+          firstSeen = now;
+          lastLogin = now;
+          visitCount = 1;
+          location;
+          solveCount = 0;
+          simplexCount = 0;
+          dualSimplexCount = 0;
+          cuttingPlaneCount = 0;
+        });
+      };
+      case (?existing) {
+        userActivity.add(caller, {
+          existing with
+          lastLogin = now;
+          visitCount = existing.visitCount + 1;
+          location;
+        });
+      };
+    };
+  };
+
+  public shared ({ caller }) func recordSolve(method : Text) : async () {
+    if (caller.isAnonymous()) { return };
+    ensureRegistered(caller);
+    if (method != "simplex" and method != "dual" and method != "cutting-plane") {
+      Runtime.trap("Invalid method: must be 'simplex', 'dual', or 'cutting-plane'");
+    };
+    let now = Time.now();
+    switch (userActivity.get(caller)) {
+      case (null) {
+        userActivity.add(caller, {
+          principal = caller;
+          firstSeen = now;
+          lastLogin = now;
+          visitCount = 1;
+          location = "";
+          solveCount = 1;
+          simplexCount = if (method == "simplex") { 1 } else { 0 };
+          dualSimplexCount = if (method == "dual") { 1 } else { 0 };
+          cuttingPlaneCount = if (method == "cutting-plane") { 1 } else { 0 };
+        });
+      };
+      case (?existing) {
+        userActivity.add(caller, {
+          existing with
+          solveCount = existing.solveCount + 1;
+          simplexCount = existing.simplexCount + (if (method == "simplex") { 1 } else { 0 });
+          dualSimplexCount = existing.dualSimplexCount + (if (method == "dual") { 1 } else { 0 });
+          cuttingPlaneCount = existing.cuttingPlaneCount + (if (method == "cutting-plane") { 1 } else { 0 });
+        });
+      };
+    };
+  };
+
+  public query ({ caller }) func getAllUserActivity() : async [UserActivity] {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can view all activity");
+    };
+    userActivity.values().toArray();
+  };
+
+  public query ({ caller }) func getUserActivity(user : Principal) : async ?UserActivity {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can view activity");
+    };
+    userActivity.get(user);
   };
 };

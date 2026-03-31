@@ -15,6 +15,20 @@ export interface Constraint {
   'operator' : string,
   'variables' : Array<Variable>,
 }
+export interface FeedbackEntry {
+  'id' : bigint,
+  'principal' : Principal,
+  'name' : [] | [string],
+  'email' : [] | [string],
+  'comment' : string,
+  'timestamp' : bigint,
+  'problemContext' : string,
+  'rating' : bigint,
+}
+export interface FeedbackStats {
+  'totalCount' : bigint,
+  'averageRating' : number,
+}
 export interface LPPSolution {
   'status' : string,
   'problemId' : bigint,
@@ -30,6 +44,17 @@ export interface LPProblem {
   'createdAt' : bigint,
   'isMaximize' : boolean,
 }
+export interface UserActivity {
+  'firstSeen' : bigint,
+  'principal' : Principal,
+  'visitCount' : bigint,
+  'solveCount' : bigint,
+  'lastLogin' : bigint,
+  'dualSimplexCount' : bigint,
+  'location' : string,
+  'simplexCount' : bigint,
+  'cuttingPlaneCount' : bigint,
+}
 export interface UserProfile { 'name' : string, 'email' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
@@ -43,16 +68,26 @@ export interface _SERVICE {
     bigint
   >,
   'deleteProblem' : ActorMethod<[bigint], boolean>,
+  'getAllFeedback' : ActorMethod<[], Array<FeedbackEntry>>,
+  'getAllUserActivity' : ActorMethod<[], Array<UserActivity>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
+  'getFeedbackStats' : ActorMethod<[], FeedbackStats>,
   'getProblem' : ActorMethod<[bigint], [] | [LPProblem]>,
   'getSolution' : ActorMethod<[bigint], [] | [LPPSolution]>,
+  'getUserActivity' : ActorMethod<[Principal], [] | [UserActivity]>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'listAllProblems' : ActorMethod<[], Array<LPProblem>>,
   'listMyProblems' : ActorMethod<[], Array<LPProblem>>,
+  'recordLogin' : ActorMethod<[string], undefined>,
+  'recordSolve' : ActorMethod<[string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'solveProblem' : ActorMethod<[bigint], [] | [LPPSolution]>,
+  'submitFeedback' : ActorMethod<
+    [[] | [string], [] | [string], bigint, string, string],
+    bigint
+  >,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

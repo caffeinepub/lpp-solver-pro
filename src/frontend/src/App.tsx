@@ -9,12 +9,29 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
-import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  KeyRound,
+  LogOut,
+  MessageSquareHeart,
+  Shield,
+  Users,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import AdminPanel from "./components/AdminPanel";
 import AuthScreen from "./components/AuthScreen";
+import FeedbackForm from "./components/FeedbackForm";
 import InputForm, { type InputFormState } from "./components/InputForm";
 import ProblemHistory from "./components/ProblemHistory";
 import SolverView, { type SolverState } from "./components/SolverView";
+import UsersPanel from "./components/UsersPanel";
+import { useActor } from "./hooks/useActor";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import type { LPProblem } from "./lppSolver";
 
@@ -37,6 +54,7 @@ export interface HistoryEntry {
 export default function App() {
   const { identity, login, clear, isInitializing, isLoggingIn } =
     useInternetIdentity();
+  const { actor: backend } = useActor();
 
   const [view, setView] = useState<AppView>("input");
   const [problem, setProblem] = useState<LPProblem | null>(null);
@@ -48,6 +66,13 @@ export default function App() {
       return [];
     }
   });
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showUsersPanel, setShowUsersPanel] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [showClaimAdmin, setShowClaimAdmin] = useState(false);
+  const [claimToken, setClaimToken] = useState("");
+  const [claimLoading, setClaimLoading] = useState(false);
 
   // Restore-from-history state
   const [formKey, setFormKey] = useState(0);
@@ -60,6 +85,34 @@ export default function App() {
   const [pendingRestore, setPendingRestore] = useState<HistoryEntry | null>(
     null,
   );
+
+  // Check admin status on mount
+  useEffect(() => {
+    if (!backend || !identity) return;
+    backend
+      .isCallerAdmin()
+      .then(setIsAdmin)
+      .catch(() => setIsAdmin(false));
+  }, [backend, identity]);
+
+  // Record login and capture location
+  useEffect(() => {
+    if (!backend || !identity) return;
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const loc = `${pos.coords.latitude.toFixed(2)},${pos.coords.longitude.toFixed(2)}`;
+          backend.recordLogin(loc).catch(() => {});
+        },
+        () => {
+          backend.recordLogin("").catch(() => {});
+        },
+        { timeout: 5000 },
+      );
+    } else {
+      backend.recordLogin("").catch(() => {});
+    }
+  }, [backend, identity]);
 
   // ─── Auth gate ───────────────────────────────────────────────────────────
   if (isInitializing || !identity) {
@@ -120,9 +173,12 @@ export default function App() {
     setPendingRestore(null);
   }
 
+  // Build a problem context snapshot string
+  const problemContext = problem ? JSON.stringify(problem) : "";
+
   // Abbreviated principal for logout bar
   const principal = identity.getPrincipal().toString();
-  const shortPrincipal = `${principal.slice(0, 8)}…`;
+  const shortPrincipal = `${principal.slice(0, 8)}\u2026`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -132,6 +188,42 @@ export default function App() {
           <span className="text-xs text-muted-foreground font-mono hidden sm:inline">
             {shortPrincipal}
           </span>
+          {isAdmin && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 h-8 px-3"
+                onClick={() => setShowUsersPanel(true)}
+                data-ocid="users.open_modal_button"
+              >
+                <Users className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">Users</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-50 h-8 px-3"
+                onClick={() => setShowAdminPanel(true)}
+                data-ocid="admin.open_modal_button"
+              >
+                <Shield className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">Admin</span>
+              </Button>
+            </>
+          )}
+          {!isAdmin && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-muted-foreground hover:text-yellow-600 h-8 px-3"
+              onClick={() => setShowClaimAdmin(true)}
+              data-ocid="admin.claim.open_modal_button"
+            >
+              <KeyRound className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Admin</span>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -169,6 +261,97 @@ export default function App() {
           initialSolverState={initialSolverState}
           inputFormStateForHistory={initialInputState}
         />
+      )}
+
+      {/* Floating feedback button */}
+      <Button
+        onClick={() => setFeedbackOpen(true)}
+        className="fixed bottom-6 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white shadow-lg rounded-full gap-2 px-4 py-2 h-auto"
+        data-ocid="feedback.open_modal_button"
+      >
+        <MessageSquareHeart className="h-4 w-4 shrink-0" />
+        <span className="hidden sm:inline text-sm font-medium">
+          Share Your Feedback
+        </span>
+      </Button>
+
+      {/* Feedback modal */}
+      <Dialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
+        <DialogContent
+          className="max-w-lg max-h-[90vh] overflow-y-auto"
+          data-ocid="feedback.dialog"
+        >
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-r from-blue-600 to-blue-400 p-2 rounded-lg">
+                <MessageSquareHeart className="h-5 w-5 text-white" />
+              </div>
+              <DialogTitle className="text-lg font-bold">
+                Share Your Feedback
+              </DialogTitle>
+            </div>
+          </DialogHeader>
+          <FeedbackForm
+            principal={principal}
+            problemContext={problemContext}
+            onClose={() => setFeedbackOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Claim Admin dialog */}
+      <Dialog open={showClaimAdmin} onOpenChange={setShowClaimAdmin}>
+        <DialogContent data-ocid="admin.claim.dialog">
+          <DialogHeader>
+            <DialogTitle>Claim Admin Access</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Enter the admin token to register yourself as admin.
+            </p>
+            <Input
+              type="password"
+              placeholder="Admin token"
+              value={claimToken}
+              onChange={(e) => setClaimToken(e.target.value)}
+              data-ocid="admin.claim.input"
+            />
+            <Button
+              className="w-full"
+              disabled={claimLoading || !claimToken}
+              data-ocid="admin.claim.submit_button"
+              onClick={async () => {
+                if (!backend) return;
+                setClaimLoading(true);
+                try {
+                  await backend._initializeAccessControlWithSecret(claimToken);
+                  const adminNow = await backend.isCallerAdmin();
+                  setIsAdmin(adminNow);
+                  setShowClaimAdmin(false);
+                  setClaimToken("");
+                } catch {
+                  alert(
+                    "Failed to claim admin. The token may be incorrect or admin is already assigned.",
+                  );
+                } finally {
+                  setClaimLoading(false);
+                }
+              }}
+            >
+              {claimLoading ? "Claiming..." : "Claim Admin"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin panel overlay */}
+      {showAdminPanel && (
+        <AdminPanel onClose={() => setShowAdminPanel(false)} />
+      )}
+
+      {/* Users panel overlay */}
+      {showUsersPanel && (
+        <UsersPanel onClose={() => setShowUsersPanel(false)} />
       )}
 
       {/* Confirmation dialog for restoring a history problem */}

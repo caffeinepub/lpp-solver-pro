@@ -3,6 +3,7 @@ import { jsPDF } from "jspdf";
 import { Download, Info, RefreshCw, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { DisplayMode, HistoryEntry } from "../App";
+import { useActor } from "../hooks/useActor";
 import {
   type IterationStep,
   type LPProblem,
@@ -169,6 +170,7 @@ export default function SolverView({
   const stdForm = buildStandardForm(problem);
   const method = detectMethod(stdForm);
   const savedRef = useRef(Boolean(initialSolverState));
+  const { actor: backendActor } = useActor();
 
   const [state, setState] = useState<SolverState>(
     initialSolverState ?? {
@@ -224,6 +226,14 @@ export default function SolverView({
         solverState: { ...state },
       };
       onSaveProblem(entry);
+      // Record solve in backend for user analytics
+      const solveMethod =
+        state.gomoryCutCount > 0
+          ? "cutting-plane"
+          : method === "simplex"
+            ? "simplex"
+            : "dual";
+      backendActor?.recordSolve(solveMethod).catch(() => {});
     }
   }, [state.phase, state.solution]);
 
