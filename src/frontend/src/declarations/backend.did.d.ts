@@ -88,6 +88,7 @@ export interface _SERVICE {
     [[] | [string], [] | [string], bigint, string, string],
     bigint
   >,
+  'claimAdminWithToken' : ActorMethod<[string], boolean>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

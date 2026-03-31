@@ -105,6 +105,7 @@ export const idlService = IDL.Service({
       [IDL.Nat],
       [],
     ),
+  'claimAdminWithToken' : IDL.Func([IDL.Text], [IDL.Bool], []),
 });
 
 export const idlInitArgs = [];
@@ -204,6 +205,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Nat],
         [],
       ),
+    'claimAdminWithToken' : IDL.Func([IDL.Text], [IDL.Bool], []),
   });
 };
 

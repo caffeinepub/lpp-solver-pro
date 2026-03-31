@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { jsPDF } from "jspdf";
+// jsPDF loaded dynamically from CDN
+type jsPDF = any; // eslint-disable-line
 import { Download, Info, RefreshCw, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { DisplayMode, HistoryEntry } from "../App";
@@ -665,8 +666,20 @@ export default function SolverView({
     return y + 3;
   }
 
-  function handleDownloadPDF() {
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
+  async function handleDownloadPDF() {
+    // Load jsPDF from CDN if not already loaded
+    if (!(window as any).jspdf) {
+      await new Promise<void>((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src =
+          "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error("Failed to load jsPDF"));
+        document.head.appendChild(s);
+      });
+    }
+    const jsPDFLib = (window as any).jspdf?.jsPDF || (window as any).jsPDF;
+    const doc = new jsPDFLib({ unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
 

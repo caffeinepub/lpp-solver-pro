@@ -169,6 +169,7 @@ export interface backendInterface {
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     solveProblem(problemId: bigint): Promise<LPPSolution | null>;
     submitFeedback(name: string | null, email: string | null, rating: bigint, comment: string, problemContext: string): Promise<bigint>;
+    claimAdminWithToken(token: string): Promise<boolean>;
 }
 import type { FeedbackEntry as _FeedbackEntry, LPPSolution as _LPPSolution, LPProblem as _LPProblem, UserActivity as _UserActivity, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -464,6 +465,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.submitFeedback(to_candid_opt_n16(this._uploadFile, this._downloadFile, arg0), to_candid_opt_n16(this._uploadFile, this._downloadFile, arg1), arg2, arg3, arg4);
+            return result;
+        }
+    }
+    async claimAdminWithToken(arg0: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.claimAdminWithToken(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.claimAdminWithToken(arg0);
             return result;
         }
     }

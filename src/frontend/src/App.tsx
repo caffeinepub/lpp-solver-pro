@@ -424,9 +424,7 @@ export default function App() {
                 setClaimLoading(true);
                 setClaimError("");
                 try {
-                  const success = await (backend as any).claimAdminWithToken(
-                    claimToken,
-                  );
+                  const success = await backend.claimAdminWithToken(claimToken);
                   if (!success) throw new Error("Invalid token");
                   setAdminUnlockedAt(Date.now());
                   setShowClaimAdmin(false);
