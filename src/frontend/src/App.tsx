@@ -53,6 +53,8 @@ export interface HistoryEntry {
   solverState?: SolverState;
 }
 
+const ADMIN_TTL = 300000; // 5 minutes in ms
+
 export default function App() {
   const { identity, login, clear, isInitializing, isLoggingIn } =
     useInternetIdentity();
@@ -70,11 +72,13 @@ export default function App() {
   });
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [showUsersPanel, setShowUsersPanel] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminUnlockedAt, setAdminUnlockedAt] = useState<number | null>(null);
+  const [, forceUpdate] = useState(0);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [showClaimAdmin, setShowClaimAdmin] = useState(false);
   const [claimToken, setClaimToken] = useState("");
   const [claimLoading, setClaimLoading] = useState(false);
+  const [claimError, setClaimError] = useState("");
 
   // Profile / email setup state
   const [profileChecked, setProfileChecked] = useState(false);
@@ -92,14 +96,25 @@ export default function App() {
     null,
   );
 
-  // Check admin status on mount
+  // Derive isAdmin from time-based unlock
+  const isAdmin =
+    adminUnlockedAt !== null && Date.now() - adminUnlockedAt < ADMIN_TTL;
+
+  // Countdown timer — ticks every second while admin is unlocked
   useEffect(() => {
-    if (!backend || !identity) return;
-    backend
-      .isCallerAdmin()
-      .then(setIsAdmin)
-      .catch(() => setIsAdmin(false));
-  }, [backend, identity]);
+    if (adminUnlockedAt === null) return;
+    const interval = setInterval(() => {
+      if (Date.now() - adminUnlockedAt >= ADMIN_TTL) {
+        clearInterval(interval);
+        setAdminUnlockedAt(null);
+        setShowAdminPanel(false);
+        setShowUsersPanel(false);
+      } else {
+        forceUpdate((n) => n + 1);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [adminUnlockedAt]);
 
   // Record login and capture location
   useEffect(() => {
@@ -130,7 +145,6 @@ export default function App() {
         setProfileChecked(true);
       })
       .catch(() => {
-        // On error, skip email setup to avoid blocking access
         setHasProfile(true);
         setProfileChecked(true);
       });
@@ -215,6 +229,14 @@ export default function App() {
     setPendingRestore(null);
   }
 
+  // Build countdown string
+  const remaining = adminUnlockedAt
+    ? Math.max(0, ADMIN_TTL - (Date.now() - adminUnlockedAt))
+    : 0;
+  const countdownMins = Math.floor(remaining / 60000);
+  const countdownSecs = Math.floor((remaining % 60000) / 1000);
+  const countdownStr = `${countdownMins}:${String(countdownSecs).padStart(2, "0")}`;
+
   // Build a problem context snapshot string
   const problemContext = problem ? JSON.stringify(problem) : "";
 
@@ -230,6 +252,11 @@ export default function App() {
           <span className="text-xs text-muted-foreground font-mono hidden sm:inline">
             {shortPrincipal}
           </span>
+          {isAdmin && (
+            <span className="text-xs font-mono text-amber-500 font-semibold tabular-nums select-none">
+              🔓 {countdownStr}
+            </span>
+          )}
           {isAdmin && (
             <>
               <Button
@@ -254,18 +281,20 @@ export default function App() {
               </Button>
             </>
           )}
-          {!isAdmin && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground hover:text-yellow-600 h-8 px-3"
-              onClick={() => setShowClaimAdmin(true)}
-              data-ocid="admin.claim.open_modal_button"
-            >
-              <KeyRound className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Admin</span>
-            </Button>
-          )}
+          {/* Key icon always visible — re-enter token to unlock or reset timer */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground hover:text-yellow-600 h-8 px-3"
+            onClick={() => {
+              setClaimToken("");
+              setClaimError("");
+              setShowClaimAdmin(true);
+            }}
+            data-ocid="admin.claim.open_modal_button"
+          >
+            <KeyRound className="h-3.5 w-3.5" />
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -342,22 +371,50 @@ export default function App() {
       </Dialog>
 
       {/* Claim Admin dialog */}
-      <Dialog open={showClaimAdmin} onOpenChange={setShowClaimAdmin}>
+      <Dialog
+        open={showClaimAdmin}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowClaimAdmin(false);
+            setClaimError("");
+          }
+        }}
+      >
         <DialogContent data-ocid="admin.claim.dialog">
           <DialogHeader>
-            <DialogTitle>Claim Admin Access</DialogTitle>
+            <DialogTitle>
+              {isAdmin ? "Refresh Admin Session" : "Claim Admin Access"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <p className="text-sm text-muted-foreground">
-              Enter the admin token to register yourself as admin.
+              {isAdmin
+                ? "Enter the admin token to reset your 5-minute session timer."
+                : "Enter the admin token to unlock admin access for 5 minutes."}
             </p>
             <Input
               type="password"
               placeholder="Admin token"
               value={claimToken}
-              onChange={(e) => setClaimToken(e.target.value)}
+              onChange={(e) => {
+                setClaimToken(e.target.value);
+                setClaimError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && claimToken && !claimLoading) {
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
               data-ocid="admin.claim.input"
             />
+            {claimError && (
+              <p
+                className="text-sm text-destructive"
+                data-ocid="admin.claim.error_state"
+              >
+                {claimError}
+              </p>
+            )}
             <Button
               className="w-full"
               disabled={claimLoading || !claimToken}
@@ -365,25 +422,34 @@ export default function App() {
               onClick={async () => {
                 if (!backend) return;
                 setClaimLoading(true);
+                setClaimError("");
                 try {
                   const success = await (backend as any).claimAdminWithToken(
                     claimToken,
                   );
-                  if (!success)
-                    throw new Error("Invalid token or claim failed");
-                  setIsAdmin(true);
+                  if (!success) throw new Error("Invalid token");
+                  setAdminUnlockedAt(Date.now());
                   setShowClaimAdmin(false);
                   setClaimToken("");
                 } catch {
-                  alert(
-                    "Failed to claim admin. The token may be incorrect or admin is already assigned.",
+                  setClaimError(
+                    "Invalid token. Please check the token and try again.",
                   );
                 } finally {
                   setClaimLoading(false);
                 }
               }}
             >
-              {claimLoading ? "Claiming..." : "Claim Admin"}
+              {claimLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying…
+                </>
+              ) : isAdmin ? (
+                "Reset Timer"
+              ) : (
+                "Unlock Admin"
+              )}
             </Button>
           </div>
         </DialogContent>

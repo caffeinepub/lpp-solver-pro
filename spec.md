@@ -1,25 +1,28 @@
 # LPP Solver Pro
 
 ## Current State
-The app is a full-featured LPP solver with Internet Identity auth, problem history, PDF export, feedback system, and admin/users panels. Admin access is token-gated via "Apple$12". The Users Panel shows activity data (principal, visits, solves, location, etc.) but has no email column. There is no first-login email collection flow.
+Admin access is claimed via token dialog and stored in `isAdmin` React state for the entire session. Once claimed, Users and Admin panels remain accessible indefinitely until page refresh. The backend correctly enforces admin checks on all data endpoints.
 
 ## Requested Changes (Diff)
 
 ### Add
-- First-login mandatory email prompt: after first login (when user has no profile), show an email collection screen before the solver. User must enter email to proceed. Email saved via `saveCallerUserProfile`.
-- Backend: `getAllUserProfiles()` admin-only query that returns all user profiles (principal + email).
-- Email column in Users Panel table, populated by cross-referencing user profiles with activity records.
+- 5-minute countdown timer displayed in the top bar when admin session is active
+- Auto re-lock logic: after 5 minutes, isAdmin resets to false, panels close
+- Token prompt re-appears if user tries to access panels after lock
 
 ### Modify
-- App.tsx: after identity is set, check `getCallerUserProfile()`. If null, show EmailSetupScreen. Once email is saved, show the solver.
-- UsersPanel.tsx: fetch all user profiles alongside activity, add Email column.
-- backend main.mo: add `getAllUserProfiles` query (admin only).
+- isAdmin state: track adminUnlockedAt timestamp, derive active admin status from elapsed time
+- Top bar: show countdown timer (MM:SS) next to admin buttons when unlocked
+- Key icon always visible so token can be re-entered after lock
 
 ### Remove
-- Nothing removed.
+- Permanent admin session (no more session-persistent admin access)
+- Initial isCallerAdmin() check on mount
 
 ## Implementation Plan
-1. Add `getAllUserProfiles` to backend (Motoko + update backend.d.ts).
-2. Create `EmailSetupScreen` component: form with mandatory email field, calls `saveCallerUserProfile`, then sets profile state to proceed.
-3. In App.tsx: after identity resolves, fetch `getCallerUserProfile()`. If no profile, render `EmailSetupScreen` instead of solver.
-4. In UsersPanel.tsx: also fetch `getAllUserProfiles()`, build a map of principal→email, add Email column to table.
+1. Replace isAdmin boolean with adminUnlockedAt: number | null state
+2. Derive isAdmin = adminUnlockedAt !== null && Date.now() - adminUnlockedAt < 300000
+3. Add 1-second interval useEffect to force re-render, auto-close panels and reset on expiry
+4. On successful token claim: set adminUnlockedAt = Date.now()
+5. Show MM:SS countdown in top bar in amber color when admin is active
+6. Always show key icon button for re-entry
