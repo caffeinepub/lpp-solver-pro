@@ -9,9 +9,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { Principal } from "@icp-sdk/core/principal";
 import { RefreshCw, Users, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import type { UserActivity } from "../backend.d";
+import type { UserActivity, UserProfile } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 
 interface UsersPanelProps {
@@ -33,18 +34,16 @@ export default function UsersPanel({ onClose }: UsersPanelProps) {
     try {
       const [allUsers, profiles] = await Promise.all([
         backend.getAllUserActivity(),
-        (backend as any).getAllUserProfiles() as Promise<
-          Array<
-            [
-              import("@icp-sdk/core/principal").Principal,
-              import("./../backend.d").UserProfile,
-            ]
-          >
-        >,
+        backend.getAllUserProfiles(),
       ]);
       setUsers(allUsers);
       setEmailMap(
-        new Map(profiles.map(([p, prof]) => [p.toString(), prof.email])),
+        new Map(
+          (profiles as Array<[Principal, UserProfile]>).map(([p, prof]) => [
+            p.toString(),
+            prof.email,
+          ]),
+        ),
       );
       setLastRefresh(new Date());
     } catch {

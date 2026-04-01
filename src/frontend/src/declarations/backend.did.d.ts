@@ -70,6 +70,7 @@ export interface _SERVICE {
   'deleteProblem' : ActorMethod<[bigint], boolean>,
   'getAllFeedback' : ActorMethod<[], Array<FeedbackEntry>>,
   'getAllUserActivity' : ActorMethod<[], Array<UserActivity>>,
+  'getAllUserProfiles' : ActorMethod<[], Array<[Principal, UserProfile]>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getFeedbackStats' : ActorMethod<[], FeedbackStats>,
