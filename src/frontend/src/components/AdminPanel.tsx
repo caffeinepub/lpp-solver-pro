@@ -36,29 +36,28 @@ function StarDisplay({ rating }: { rating: number }) {
 
 export default function AdminPanel({ onClose }: AdminPanelProps) {
   const { actor: backend } = useActor();
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [feedback, setFeedback] = useState<FeedbackEntry[]>([]);
   const [stats, setStats] = useState<FeedbackStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!backend) return;
     async function load() {
       setLoading(true);
+      setError(null);
       try {
-        const [adminCheck, allFeedback, feedbackStats] = await Promise.all([
-          backend!.isCallerAdmin(),
+        const [allFeedback, feedbackStats] = await Promise.all([
           backend!.getAllFeedback(),
           backend!.getFeedbackStats(),
         ]);
-        setIsAdmin(adminCheck);
-        if (adminCheck) {
-          setFeedback(allFeedback);
-          setStats(feedbackStats);
-        }
+        setFeedback(allFeedback);
+        setStats(feedbackStats);
       } catch {
-        setIsAdmin(false);
+        setError(
+          "Failed to load feedback data. Please close and re-enter the token.",
+        );
       } finally {
         setLoading(false);
       }
@@ -81,7 +80,7 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
 
   function truncatePrincipal(p: { toString(): string }) {
     const s = p.toString();
-    return `${s.slice(0, 8)}…${s.slice(-4)}`;
+    return `${s.slice(0, 8)}\u2026${s.slice(-4)}`;
   }
 
   const skeletonKeys = ["sk1", "sk2", "sk3", "sk4", "sk5"];
@@ -121,16 +120,14 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
               <Skeleton key={k} className="h-10 w-full" />
             ))}
           </div>
-        ) : !isAdmin ? (
+        ) : error ? (
           <div
             className="flex flex-col items-center justify-center h-64 gap-3 text-center"
             data-ocid="admin.error_state"
           >
             <Shield className="h-12 w-12 text-destructive" />
-            <p className="text-xl font-bold text-destructive">Access Denied</p>
-            <p className="text-muted-foreground">
-              You are not authorized to view this page.
-            </p>
+            <p className="text-xl font-bold text-destructive">Error</p>
+            <p className="text-muted-foreground">{error}</p>
           </div>
         ) : (
           <div className="max-w-5xl mx-auto p-4 sm:p-6 flex flex-col gap-6">
@@ -210,11 +207,13 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
                               {entry.name ? (
                                 <Badge variant="secondary">{entry.name}</Badge>
                               ) : (
-                                <span className="text-muted-foreground">—</span>
+                                <span className="text-muted-foreground">
+                                  \u2014
+                                </span>
                               )}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
-                              {entry.email || "—"}
+                              {entry.email || "\u2014"}
                             </TableCell>
                             <TableCell>
                               <StarDisplay rating={Number(entry.rating)} />
@@ -243,7 +242,7 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
                                 </button>
                               ) : (
                                 <span className="text-muted-foreground text-xs">
-                                  —
+                                  \u2014
                                 </span>
                               )}
                             </TableCell>

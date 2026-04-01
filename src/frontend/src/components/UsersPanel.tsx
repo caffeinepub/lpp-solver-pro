@@ -20,18 +20,18 @@ interface UsersPanelProps {
 
 export default function UsersPanel({ onClose }: UsersPanelProps) {
   const { actor: backend } = useActor();
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [users, setUsers] = useState<UserActivity[]>([]);
   const [emailMap, setEmailMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!backend) return;
     setLoading(true);
+    setError(null);
     try {
-      const [adminCheck, allUsers, profiles] = await Promise.all([
-        backend.isCallerAdmin(),
+      const [allUsers, profiles] = await Promise.all([
         backend.getAllUserActivity(),
         (backend as any).getAllUserProfiles() as Promise<
           Array<
@@ -42,16 +42,15 @@ export default function UsersPanel({ onClose }: UsersPanelProps) {
           >
         >,
       ]);
-      setIsAdmin(adminCheck);
-      if (adminCheck) {
-        setUsers(allUsers);
-        setEmailMap(
-          new Map(profiles.map(([p, prof]) => [p.toString(), prof.email])),
-        );
-        setLastRefresh(new Date());
-      }
+      setUsers(allUsers);
+      setEmailMap(
+        new Map(profiles.map(([p, prof]) => [p.toString(), prof.email])),
+      );
+      setLastRefresh(new Date());
     } catch {
-      setIsAdmin(false);
+      setError(
+        "Failed to load user data. Please close and re-enter the token.",
+      );
     } finally {
       setLoading(false);
     }
@@ -137,16 +136,14 @@ export default function UsersPanel({ onClose }: UsersPanelProps) {
               <Skeleton key={k} className="h-10 w-full" />
             ))}
           </div>
-        ) : !isAdmin ? (
+        ) : error ? (
           <div
             className="flex flex-col items-center justify-center h-64 gap-3 text-center"
             data-ocid="users.error_state"
           >
             <Users className="h-12 w-12 text-destructive" />
-            <p className="text-xl font-bold text-destructive">Access Denied</p>
-            <p className="text-muted-foreground">
-              You are not authorized to view this page.
-            </p>
+            <p className="text-xl font-bold text-destructive">Error</p>
+            <p className="text-muted-foreground">{error}</p>
           </div>
         ) : (
           <div className="max-w-6xl mx-auto p-4 sm:p-6 flex flex-col gap-6">
