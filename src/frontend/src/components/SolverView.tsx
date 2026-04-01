@@ -610,28 +610,52 @@ export default function SolverView({
     const colNames = ["Basis", ...tableau.varNames];
     const numCols = colNames.length;
     const availW = pageW - 28;
-    const colW = Math.min(20, availW / numCols);
-    const rowH = 6;
+    const colW = Math.min(22, availW / numCols);
+    const tableW = colW * numCols;
+    const rowH = 7;
     const fontSize = numCols > 10 ? 5 : 6;
+    const cellPad = 1.2;
 
-    let y = checkPB(yStart, rowH + 4);
+    let y = checkPB(yStart, rowH * 2 + 4);
 
-    // Header row — purple background, white text
+    // ── Header row: light gray bg (#F1F5F9), dark text, bold, bottom+right borders ──
     doc.setFont("helvetica", "bold");
     doc.setFontSize(fontSize);
-    doc.setFillColor(70, 40, 130);
-    doc.rect(14, y - 4, availW, rowH, "F");
-    doc.setTextColor(255, 255, 255);
+    // Header background
+    doc.setFillColor(241, 245, 249); // bg-secondary
+    doc.rect(14, y - rowH + cellPad, tableW, rowH, "F");
+    // Header text
+    doc.setTextColor(71, 85, 105); // text-muted-foreground (slate-600)
     for (let c = 0; c < numCols; c++) {
       const label = colNames[c];
-      doc.text(
-        label.length > 5 ? label.slice(0, 5) : label,
-        14 + c * colW + 1,
-        y,
+      const x = 14 + c * colW;
+      doc.text(label, x + colW / 2, y - 1, { align: "center" });
+    }
+    // Draw header cell borders
+    doc.setDrawColor(203, 213, 225); // border-border (slate-300)
+    doc.setLineWidth(0.3);
+    // Bottom border of header
+    doc.line(
+      14,
+      y - rowH + cellPad + rowH,
+      14 + tableW,
+      y - rowH + cellPad + rowH,
+    );
+    // Vertical dividers in header
+    for (let c = 1; c < numCols; c++) {
+      doc.line(
+        14 + c * colW,
+        y - rowH + cellPad,
+        14 + c * colW,
+        y - rowH + cellPad + rowH,
       );
     }
-    y += rowH - 1;
+    // Outer left/right/top of header
+    doc.rect(14, y - rowH + cellPad, tableW, rowH, "S");
 
+    y += cellPad + 1;
+
+    // ── Data rows ──
     const basisNames = [
       "Z",
       ...tableau.basis.map((b: number) => tableau.varNames[b]),
@@ -641,29 +665,63 @@ export default function SolverView({
 
     for (let r = 0; r < tableau.matrix.length; r++) {
       y = checkPB(y, rowH);
+      const rowTop = y - rowH + cellPad;
+
       if (r === 0) {
-        // Z row — yellow background
-        doc.setFillColor(255, 230, 100);
-        doc.rect(14, y - 4, availW, rowH, "F");
-        doc.setTextColor(60, 40, 0);
-      } else if (r % 2 === 1) {
-        // Odd constraint rows — light lavender
-        doc.setFillColor(240, 235, 255);
-        doc.rect(14, y - 4, availW, rowH, "F");
+        // Z row: light blue bg matching app header emphasis
+        doc.setFillColor(219, 234, 254); // blue-100
+        doc.rect(14, rowTop, tableW, rowH, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 64, 175); // blue-800
+      } else if (r % 2 === 0) {
+        // Even rows: very light gray
+        doc.setFillColor(248, 250, 252); // slate-50
+        doc.rect(14, rowTop, tableW, rowH, "F");
+        doc.setFont("helvetica", "normal");
         doc.setTextColor(30, 30, 30);
       } else {
-        // Even constraint rows — white
+        // Odd rows: white
+        doc.setFillColor(255, 255, 255);
+        doc.rect(14, rowTop, tableW, rowH, "F");
+        doc.setFont("helvetica", "normal");
         doc.setTextColor(30, 30, 30);
       }
-      doc.text(basisNames[r] ?? "", 14, y);
+
+      // Basis cell (bold, muted)
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(71, 85, 105);
+      doc.text(basisNames[r] ?? "", 14 + colW / 2, y - 1, { align: "center" });
+
+      // Value cells
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(
+        r === 0 ? 30 : 30,
+        r === 0 ? 64 : 30,
+        r === 0 ? 175 : 30,
+      );
       for (let c = 0; c < tableau.matrix[r].length; c++) {
         const val = fmt(tableau.matrix[r][c]);
-        doc.text(val, 14 + (c + 1) * colW + 1, y);
+        const x = 14 + (c + 1) * colW;
+        doc.text(val, x + colW / 2, y - 1, { align: "center" });
       }
-      y += rowH - 1;
+
+      // Draw row borders
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.2);
+      // Bottom border
+      doc.line(14, rowTop + rowH, 14 + tableW, rowTop + rowH);
+      // Vertical dividers
+      for (let c = 1; c < numCols; c++) {
+        doc.line(14 + c * colW, rowTop, 14 + c * colW, rowTop + rowH);
+      }
+      // Outer left/right for this row
+      doc.line(14, rowTop, 14, rowTop + rowH);
+      doc.line(14 + tableW, rowTop, 14 + tableW, rowTop + rowH);
+
+      y += cellPad + 1;
     }
 
-    return y + 3;
+    return y + 4;
   }
 
   async function handleDownloadPDF() {
