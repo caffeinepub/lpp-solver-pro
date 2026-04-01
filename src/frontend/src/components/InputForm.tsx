@@ -37,6 +37,7 @@ interface Props {
   onEditQuestion?: () => void;
   onStateChange?: (state: InputFormState) => void;
   hideActions?: boolean;
+  onSolveTriggerReady?: (trigger: () => void) => void;
 }
 
 const SUBSCRIPTS = ["₀", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉"];
@@ -119,6 +120,7 @@ export default function InputForm({
   onEditQuestion,
   onStateChange,
   hideActions,
+  onSolveTriggerReady,
 }: Props) {
   const [isMaximize, setIsMaximize] = useState(
     initialState?.isMaximize ?? true,
@@ -172,6 +174,11 @@ export default function InputForm({
     constraintVarActive,
     onStateChange,
   ]);
+
+  // Expose handleSolve to parent
+  useEffect(() => {
+    onSolveTriggerReady?.(handleSolve);
+  }, [onSolveTriggerReady]); // eslint-disable-line
 
   const numVars = varIds.length;
 

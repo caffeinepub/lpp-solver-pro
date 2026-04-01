@@ -22,6 +22,7 @@ import {
   Loader2,
   LogOut,
   MessageSquareHeart,
+  PlayCircle,
   Shield,
   Users,
 } from "lucide-react";
@@ -104,6 +105,7 @@ export default function App() {
   >();
   const [editModalOpen, setEditModalOpen] = useState(false);
   const editedStateRef = useRef<InputFormState | undefined>(undefined);
+  const editModalSolveTriggerRef = useRef<(() => void) | null>(null);
 
   // Derive isAdmin from time-based unlock
   const isAdmin =
@@ -197,6 +199,24 @@ export default function App() {
     setHasSolved(true);
   }
 
+  function handleSolveFromModal(p: LPProblem) {
+    setEditModalOpen(false);
+    setFormKey((k) => k + 1);
+    setProblem(p);
+    setView("solver");
+    setHasSolved(true);
+    setInitialSolverState(undefined);
+  }
+
+  function handleSaveAndSolve() {
+    const edited = editedStateRef.current;
+    if (edited) {
+      setInitialInputState(edited);
+      setCurrentInputState(edited);
+    }
+    editModalSolveTriggerRef.current?.();
+  }
+
   function handleReset() {
     setView("input");
     setProblem(null);
@@ -250,7 +270,7 @@ export default function App() {
     }
     setFormKey((k) => k + 1);
     setView("input");
-    setHasSolved(false);
+    setHasSolved(true); // keep true so Edit button remains visible
     setEditModalOpen(false);
   }
 
@@ -418,13 +438,16 @@ export default function App() {
           <div className="px-2 pb-2">
             <InputForm
               key={`edit-modal-${formKey}`}
-              onSolve={() => {}}
+              onSolve={handleSolveFromModal}
               displayMode={displayMode}
               onDisplayModeChange={setDisplayMode}
               initialState={currentInputState ?? initialInputState}
               hideActions
               onStateChange={(state) => {
                 editedStateRef.current = state;
+              }}
+              onSolveTriggerReady={(trigger) => {
+                editModalSolveTriggerRef.current = trigger;
               }}
             />
           </div>
@@ -436,8 +459,20 @@ export default function App() {
             >
               Cancel
             </Button>
-            <Button onClick={handleSaveEdit} data-ocid="edit.save_button">
+            <Button
+              variant="outline"
+              onClick={handleSaveEdit}
+              data-ocid="edit.save_button"
+            >
               Save Changes
+            </Button>
+            <Button
+              className="gap-2 bg-primary text-white hover:bg-primary/90"
+              onClick={handleSaveAndSolve}
+              data-ocid="edit.save_and_solve_button"
+            >
+              <PlayCircle className="h-4 w-4" />
+              Save &amp; Solve
             </Button>
           </DialogFooter>
         </DialogContent>
