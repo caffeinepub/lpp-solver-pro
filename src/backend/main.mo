@@ -27,13 +27,26 @@ actor {
     };
   };
 
-  // Claim admin with hardcoded token (bypasses env var issues)
-  // This allows any principal with the correct token to become admin,
-  // even if someone else already claimed it (replaces previous admin).
+  // Separate admin principals set — completely independent of MixinAuthorization
+  let adminPrincipals = Map.empty<Principal, Bool>();
+
+  // Check if a caller is in our custom admin set
+  func isCustomAdmin(caller : Principal) : Bool {
+    if (caller.isAnonymous()) { return false };
+    switch (adminPrincipals.get(caller)) {
+      case (?true) { true };
+      case (_) { false };
+    };
+  };
+
+  // Claim admin with hardcoded token — stores in custom admin set
   public shared ({ caller }) func claimAdminWithToken(token : Text) : async Bool {
     if (caller.isAnonymous()) { return false };
     let expected = "Apple$12";
     if (token != expected) { return false };
+    // Add to custom admin set
+    adminPrincipals.add(caller, true);
+    // Also update the MixinAuthorization role for compatibility
     accessControlState.userRoles.add(caller, #admin);
     accessControlState.adminAssigned := true;
     true;
@@ -54,7 +67,7 @@ actor {
 
   // Get another user's profile (admin only or own profile)
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+    if (caller != user and not isCustomAdmin(caller)) {
       Runtime.trap("Unauthorized: Can only view your own profile or must be admin");
     };
     userProfiles.get(user);
@@ -62,7 +75,7 @@ actor {
 
   // Get all user profiles (admin only)
   public query ({ caller }) func getAllUserProfiles() : async [(Principal, UserProfile)] {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isCustomAdmin(caller)) {
       Runtime.trap("Unauthorized: Only admins can view all profiles");
     };
     userProfiles.entries().toArray();
@@ -133,7 +146,7 @@ actor {
     switch (problems.get(problemId)) {
       case null { null };
       case (?problem) {
-        if (problem.owner != caller and not AccessControl.isAdmin(accessControlState, caller)) {
+        if (problem.owner != caller and not isCustomAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only view your own problems or must be admin");
         };
         ?problem;
@@ -148,7 +161,7 @@ actor {
   };
 
   public query ({ caller }) func listAllProblems() : async [LPProblem] {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isCustomAdmin(caller)) {
       Runtime.trap("Unauthorized: Only admins can list all problems");
     };
     problems.values().toArray();
@@ -158,7 +171,7 @@ actor {
     switch (problems.get(problemId)) {
       case null { null };
       case (?problem) {
-        if (problem.owner != caller and not AccessControl.isAdmin(accessControlState, caller)) {
+        if (problem.owner != caller and not isCustomAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only solve your own problems or must be admin");
         };
         let solution : LPPSolution = {
@@ -177,7 +190,7 @@ actor {
     switch (problems.get(problemId)) {
       case null { null };
       case (?problem) {
-        if (problem.owner != caller and not AccessControl.isAdmin(accessControlState, caller)) {
+        if (problem.owner != caller and not isCustomAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only view solutions for your own problems or must be admin");
         };
         solutions.get(problemId);
@@ -189,7 +202,7 @@ actor {
     switch (problems.get(problemId)) {
       case null { false };
       case (?problem) {
-        if (problem.owner != caller and not AccessControl.isAdmin(accessControlState, caller)) {
+        if (problem.owner != caller and not isCustomAdmin(caller)) {
           Runtime.trap("Unauthorized: Can only delete your own problems or must be admin");
         };
         problems.remove(problemId);
@@ -242,7 +255,7 @@ actor {
   };
 
   public query ({ caller }) func getAllFeedback() : async [FeedbackEntry] {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isCustomAdmin(caller)) {
       Runtime.trap("Unauthorized: Only admins can view all feedback");
     };
     feedbackEntries.values().toArray();
@@ -254,7 +267,7 @@ actor {
   };
 
   public query ({ caller }) func getFeedbackStats() : async FeedbackStats {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isCustomAdmin(caller)) {
       Runtime.trap("Unauthorized: Only admins can view feedback stats");
     };
     let feedbackArray = feedbackEntries.values().toArray();
@@ -351,14 +364,14 @@ actor {
   };
 
   public query ({ caller }) func getAllUserActivity() : async [UserActivity] {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isCustomAdmin(caller)) {
       Runtime.trap("Unauthorized: Only admins can view all activity");
     };
     userActivity.values().toArray();
   };
 
   public query ({ caller }) func getUserActivity(user : Principal) : async ?UserActivity {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isCustomAdmin(caller)) {
       Runtime.trap("Unauthorized: Only admins can view activity");
     };
     userActivity.get(user);
