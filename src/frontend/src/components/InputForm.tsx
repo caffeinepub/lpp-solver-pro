@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, Edit2, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { DisplayMode } from "../App";
 import type { Constraint, LPProblem } from "../lppSolver";
 import FractionToggle from "./FractionToggle";
@@ -33,6 +33,10 @@ interface Props {
   displayMode: DisplayMode;
   onDisplayModeChange: (mode: DisplayMode) => void;
   initialState?: InputFormState;
+  hasSolved?: boolean;
+  onEditQuestion?: () => void;
+  onStateChange?: (state: InputFormState) => void;
+  hideActions?: boolean;
 }
 
 const SUBSCRIPTS = ["₀", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉"];
@@ -111,6 +115,10 @@ export default function InputForm({
   displayMode,
   onDisplayModeChange,
   initialState,
+  hasSolved,
+  onEditQuestion,
+  onStateChange,
+  hideActions,
 }: Props) {
   const [isMaximize, setIsMaximize] = useState(
     initialState?.isMaximize ?? true,
@@ -134,7 +142,6 @@ export default function InputForm({
     initialState?.activeConstraints ?? [true, true],
   );
   // constraintVarActive[ci][vi]: is variable vi active in constraint ci?
-  // Completely independent from global activeVars
   const [constraintVarActive, setConstraintVarActive] = useState<boolean[][]>(
     () =>
       initialState?.constraintVarActive ?? [
@@ -143,6 +150,28 @@ export default function InputForm({
       ],
   );
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  // Notify parent whenever form state changes
+  useEffect(() => {
+    onStateChange?.({
+      isMaximize,
+      varIds,
+      activeVars,
+      objCoeffs,
+      constraints,
+      activeConstraints,
+      constraintVarActive,
+    });
+  }, [
+    isMaximize,
+    varIds,
+    activeVars,
+    objCoeffs,
+    constraints,
+    activeConstraints,
+    constraintVarActive,
+    onStateChange,
+  ]);
 
   const numVars = varIds.length;
 
@@ -730,24 +759,42 @@ export default function InputForm({
           </Button>
         </section>
 
-        {/* Solve Button */}
-        <Button
-          type="button"
-          className="w-full h-12 text-base font-semibold bg-primary text-white hover:bg-primary/90 shadow-card"
-          onClick={handleSolve}
-          data-ocid="solve.primary_button"
-        >
-          Solve Problem
-          <ChevronDown className="ml-2" size={18} />
-        </Button>
+        {/* Solve / Edit Buttons */}
+        {!hideActions && (
+          <>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                className="flex-1 h-12 text-base font-semibold bg-primary text-white hover:bg-primary/90 shadow-card"
+                onClick={handleSolve}
+                data-ocid="solve.primary_button"
+              >
+                Solve Problem
+                <ChevronDown className="ml-2" size={18} />
+              </Button>
+              {hasSolved && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 px-5 text-base font-semibold gap-2 border-primary text-primary hover:bg-primary/5"
+                  onClick={onEditQuestion}
+                  data-ocid="edit.open_modal_button"
+                >
+                  <Edit2 size={16} />
+                  Edit
+                </Button>
+              )}
+            </div>
 
-        {Object.keys(errors).length > 0 && (
-          <p
-            className="text-destructive text-sm text-center mt-3"
-            data-ocid="solve.error_state"
-          >
-            Please fix the highlighted errors above.
-          </p>
+            {Object.keys(errors).length > 0 && (
+              <p
+                className="text-destructive text-sm text-center mt-3"
+                data-ocid="solve.error_state"
+              >
+                Please fix the highlighted errors above.
+              </p>
+            )}
+          </>
         )}
       </main>
 

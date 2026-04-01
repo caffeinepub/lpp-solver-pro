@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -24,7 +25,7 @@ import {
   Shield,
   Users,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AdminPanel from "./components/AdminPanel";
 import AuthScreen from "./components/AuthScreen";
 import EmailSetupScreen from "./components/EmailSetupScreen";
@@ -95,6 +96,14 @@ export default function App() {
   const [pendingRestore, setPendingRestore] = useState<HistoryEntry | null>(
     null,
   );
+
+  // Edit question feature
+  const [hasSolved, setHasSolved] = useState(false);
+  const [currentInputState, setCurrentInputState] = useState<
+    InputFormState | undefined
+  >();
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const editedStateRef = useRef<InputFormState | undefined>(undefined);
 
   // Derive isAdmin from time-based unlock
   const isAdmin =
@@ -185,12 +194,14 @@ export default function App() {
   function handleSolve(p: LPProblem) {
     setProblem(p);
     setView("solver");
+    setHasSolved(true);
   }
 
   function handleReset() {
     setView("input");
     setProblem(null);
     setInitialSolverState(undefined);
+    setHasSolved(false);
   }
 
   function handleSaveProblem(entry: HistoryEntry) {
@@ -215,11 +226,13 @@ export default function App() {
 
     setFormKey((k) => k + 1);
     setInitialInputState(pendingRestore.inputFormState);
+    setHasSolved(false);
 
     if (pendingRestore.solverState && pendingRestore.problem) {
       setProblem(pendingRestore.problem);
       setInitialSolverState(pendingRestore.solverState);
       setView("solver");
+      setHasSolved(true);
     } else {
       setInitialSolverState(undefined);
       setProblem(null);
@@ -227,6 +240,18 @@ export default function App() {
     }
 
     setPendingRestore(null);
+  }
+
+  function handleSaveEdit() {
+    const edited = editedStateRef.current;
+    if (edited) {
+      setInitialInputState(edited);
+      setCurrentInputState(edited);
+    }
+    setFormKey((k) => k + 1);
+    setView("input");
+    setHasSolved(false);
+    setEditModalOpen(false);
   }
 
   // Build countdown string
@@ -320,6 +345,9 @@ export default function App() {
           displayMode={displayMode}
           onDisplayModeChange={setDisplayMode}
           initialState={initialInputState}
+          hasSolved={hasSolved}
+          onEditQuestion={() => setEditModalOpen(true)}
+          onStateChange={(state) => setCurrentInputState(state)}
         />
       )}
       {view === "solver" && problem && (
@@ -331,6 +359,7 @@ export default function App() {
           onSaveProblem={handleSaveProblem}
           initialSolverState={initialSolverState}
           inputFormStateForHistory={initialInputState}
+          onEditQuestion={() => setEditModalOpen(true)}
         />
       )}
 
@@ -367,6 +396,50 @@ export default function App() {
             problemContext={problemContext}
             onClose={() => setFeedbackOpen(false)}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Question modal */}
+      <Dialog
+        open={editModalOpen}
+        onOpenChange={(open) => {
+          if (!open) setEditModalOpen(false);
+        }}
+      >
+        <DialogContent
+          className="max-w-2xl overflow-y-auto max-h-[85vh] p-0"
+          data-ocid="edit.dialog"
+        >
+          <DialogHeader className="px-6 pt-6 pb-2">
+            <DialogTitle className="text-lg font-bold">
+              Edit Question
+            </DialogTitle>
+          </DialogHeader>
+          <div className="px-2 pb-2">
+            <InputForm
+              key={`edit-modal-${formKey}`}
+              onSolve={() => {}}
+              displayMode={displayMode}
+              onDisplayModeChange={setDisplayMode}
+              initialState={currentInputState ?? initialInputState}
+              hideActions
+              onStateChange={(state) => {
+                editedStateRef.current = state;
+              }}
+            />
+          </div>
+          <DialogFooter className="px-6 pb-6 pt-2 border-t border-border gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setEditModalOpen(false)}
+              data-ocid="edit.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} data-ocid="edit.save_button">
+              Save Changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

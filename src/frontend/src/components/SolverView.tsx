@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 // jsPDF loaded dynamically from CDN
 type jsPDF = any; // eslint-disable-line
-import { Download, Info, RefreshCw, RotateCcw } from "lucide-react";
+import { Download, Edit2, Info, RefreshCw, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { DisplayMode, HistoryEntry } from "../App";
 import { useActor } from "../hooks/useActor";
@@ -159,6 +159,7 @@ export default function SolverView({
   onSaveProblem,
   initialSolverState,
   inputFormStateForHistory,
+  onEditQuestion,
 }: {
   problem: LPProblem;
   onReset: () => void;
@@ -167,6 +168,7 @@ export default function SolverView({
   onSaveProblem?: (entry: HistoryEntry) => void;
   initialSolverState?: SolverState;
   inputFormStateForHistory?: InputFormState;
+  onEditQuestion?: () => void;
 }) {
   const stdForm = buildStandardForm(problem);
   const method = detectMethod(stdForm);
@@ -886,9 +888,9 @@ export default function SolverView({
       for (const rc of step.rowCalculations) {
         let calcLine = "";
         if (rc.isPivot) {
-          calcLine = `${rc.rowName}: (${rc.currentRow.map((v: number) => fmtVal(v)).join(", ")}) ÷ ${fmtVal(rc.pivotElement ?? 1)} = (${rc.newRow.map((v: number) => fmtVal(v)).join(", ")})`;
+          calcLine = `${toPdfVar(rc.rowName)}: (${rc.currentRow.map((v: number) => fmtVal(v)).join(", ")}) ÷ ${fmtVal(rc.pivotElement ?? 1)} = (${rc.newRow.map((v: number) => fmtVal(v)).join(", ")})`;
         } else {
-          calcLine = `${rc.rowName}: (${rc.currentRow.map((v: number) => fmtVal(v)).join(", ")}) − ${fmtVal(rc.pivotCoeff)} × (${rc.pivotRowValues.map((v: number) => fmtVal(v)).join(", ")}) = (${rc.newRow.map((v: number) => fmtVal(v)).join(", ")})`;
+          calcLine = `${toPdfVar(rc.rowName)}: (${rc.currentRow.map((v: number) => fmtVal(v)).join(", ")}) − ${fmtVal(rc.pivotCoeff)} × (${rc.pivotRowValues.map((v: number) => fmtVal(v)).join(", ")}) = (${rc.newRow.map((v: number) => fmtVal(v)).join(", ")})`;
         }
         y = bodyText(calcLine, y, 22);
       }
@@ -963,6 +965,15 @@ export default function SolverView({
           </div>
           <div className="flex items-center gap-2">
             <FractionToggle mode={displayMode} onChange={onDisplayModeChange} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onEditQuestion}
+              className="gap-1 border-primary text-primary hover:bg-primary/5"
+              data-ocid="solver.edit.button"
+            >
+              <Edit2 size={14} /> Edit Question
+            </Button>
             <Button
               variant="outline"
               size="sm"
