@@ -614,79 +614,111 @@ export default function SolverView({
     const tableW = colW * numCols;
     const rowH = 7;
     const fontSize = numCols > 10 ? 5 : 6;
+    const cellPad = 1.2;
 
-    let y = checkPB(yStart, rowH * 3);
+    let y = checkPB(yStart, rowH * 2 + 4);
 
-    // ── Header row ──
+    // ── Header row: light gray bg (#F1F5F9), dark text, bold, bottom+right borders ──
     doc.setFont("helvetica", "bold");
     doc.setFontSize(fontSize);
-    doc.setFillColor(241, 245, 249);
-    doc.rect(14, y, tableW, rowH, "F");
-    doc.setDrawColor(203, 213, 225);
-    doc.setLineWidth(0.3);
-    doc.rect(14, y, tableW, rowH, "S");
-    for (let c = 1; c < numCols; c++) {
-      doc.line(14 + c * colW, y, 14 + c * colW, y + rowH);
-    }
-    doc.setTextColor(71, 85, 105);
+    // Header background
+    doc.setFillColor(241, 245, 249); // bg-secondary
+    doc.rect(14, y - rowH + cellPad, tableW, rowH, "F");
+    // Header text
+    doc.setTextColor(71, 85, 105); // text-muted-foreground (slate-600)
     for (let c = 0; c < numCols; c++) {
+      const label = colNames[c];
       const x = 14 + c * colW;
-      doc.text(colNames[c], x + colW / 2, y + rowH / 2 + fontSize * 0.18, {
-        align: "center",
-      });
+      doc.text(label, x + colW / 2, y - 1, { align: "center" });
     }
+    // Draw header cell borders
+    doc.setDrawColor(203, 213, 225); // border-border (slate-300)
+    doc.setLineWidth(0.3);
+    // Bottom border of header
+    doc.line(
+      14,
+      y - rowH + cellPad + rowH,
+      14 + tableW,
+      y - rowH + cellPad + rowH,
+    );
+    // Vertical dividers in header
+    for (let c = 1; c < numCols; c++) {
+      doc.line(
+        14 + c * colW,
+        y - rowH + cellPad,
+        14 + c * colW,
+        y - rowH + cellPad + rowH,
+      );
+    }
+    // Outer left/right/top of header
+    doc.rect(14, y - rowH + cellPad, tableW, rowH, "S");
 
-    y += rowH;
+    y += cellPad + 1;
 
     // ── Data rows ──
     const basisNames = [
       "Z",
       ...tableau.basis.map((b: number) => tableau.varNames[b]),
     ];
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(fontSize);
 
     for (let r = 0; r < tableau.matrix.length; r++) {
       y = checkPB(y, rowH);
+      const rowTop = y - rowH + cellPad;
 
       if (r === 0) {
-        doc.setFillColor(219, 234, 254);
-        doc.rect(14, y, tableW, rowH, "F");
+        // Z row: light blue bg matching app header emphasis
+        doc.setFillColor(219, 234, 254); // blue-100
+        doc.rect(14, rowTop, tableW, rowH, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 64, 175); // blue-800
       } else if (r % 2 === 0) {
-        doc.setFillColor(248, 250, 252);
-        doc.rect(14, y, tableW, rowH, "F");
+        // Even rows: very light gray
+        doc.setFillColor(248, 250, 252); // slate-50
+        doc.rect(14, rowTop, tableW, rowH, "F");
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(30, 30, 30);
       } else {
+        // Odd rows: white
         doc.setFillColor(255, 255, 255);
-        doc.rect(14, y, tableW, rowH, "F");
-      }
-
-      doc.setDrawColor(203, 213, 225);
-      doc.setLineWidth(0.2);
-      doc.rect(14, y, tableW, rowH, "S");
-      for (let c = 1; c < numCols; c++) {
-        doc.line(14 + c * colW, y, 14 + c * colW, y + rowH);
-      }
-
-      const textY = y + rowH / 2 + fontSize * 0.18;
-
-      // Basis cell
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(71, 85, 105);
-      doc.text(basisNames[r] ?? "", 14 + colW / 2, textY, { align: "center" });
-
-      // Value cells
-      if (r === 0) {
-        doc.setTextColor(30, 64, 175);
-      } else {
+        doc.rect(14, rowTop, tableW, rowH, "F");
+        doc.setFont("helvetica", "normal");
         doc.setTextColor(30, 30, 30);
       }
+
+      // Basis cell (bold, muted)
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(71, 85, 105);
+      doc.text(basisNames[r] ?? "", 14 + colW / 2, y - 1, { align: "center" });
+
+      // Value cells
       doc.setFont("helvetica", "normal");
+      doc.setTextColor(
+        r === 0 ? 30 : 30,
+        r === 0 ? 64 : 30,
+        r === 0 ? 175 : 30,
+      );
       for (let c = 0; c < tableau.matrix[r].length; c++) {
         const val = fmt(tableau.matrix[r][c]);
         const x = 14 + (c + 1) * colW;
-        doc.text(val, x + colW / 2, textY, { align: "center" });
+        doc.text(val, x + colW / 2, y - 1, { align: "center" });
       }
 
-      y += rowH;
+      // Draw row borders
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.2);
+      // Bottom border
+      doc.line(14, rowTop + rowH, 14 + tableW, rowTop + rowH);
+      // Vertical dividers
+      for (let c = 1; c < numCols; c++) {
+        doc.line(14 + c * colW, rowTop, 14 + c * colW, rowTop + rowH);
+      }
+      // Outer left/right for this row
+      doc.line(14, rowTop, 14, rowTop + rowH);
+      doc.line(14 + tableW, rowTop, 14 + tableW, rowTop + rowH);
+
+      y += cellPad + 1;
     }
 
     return y + 4;
