@@ -597,6 +597,23 @@ export default function SolverView({
 
   // ─── PDF helpers ──────────────────────────────────────────────────────────────────
 
+  // Convert Unicode subscript chars (₁₂₃...) to plain ASCII digits for jsPDF
+  function toPdfVar(name: string): string {
+    const subMap: Record<string, string> = {
+      "₀": "0",
+      "₁": "1",
+      "₂": "2",
+      "₃": "3",
+      "₄": "4",
+      "₅": "5",
+      "₆": "6",
+      "₇": "7",
+      "₈": "8",
+      "₉": "9",
+    };
+    return name.replace(/[₀₁₂₃₄₅₆₇₈₉]/g, (c) => subMap[c] ?? c);
+  }
+
   function addTableauToPDF(
     tableau: Tableau,
     doc: jsPDF,
@@ -607,7 +624,7 @@ export default function SolverView({
     checkPB: (y: number, needed?: number) => number,
     _watermark: () => void,
   ): number {
-    const colNames = ["Basis", ...tableau.varNames];
+    const colNames = ["Basis", ...tableau.varNames.map(toPdfVar)];
     const numCols = colNames.length;
     const availW = pageW - 28;
     const colW = Math.min(22, availW / numCols);
@@ -641,7 +658,7 @@ export default function SolverView({
     // ── Data rows ──
     const basisNames = [
       "Z",
-      ...tableau.basis.map((b: number) => tableau.varNames[b]),
+      ...tableau.basis.map((b: number) => toPdfVar(tableau.varNames[b])),
     ];
     doc.setFontSize(fontSize);
 
@@ -841,9 +858,10 @@ export default function SolverView({
       y += 5;
 
       // Entering / leaving variable info
-      const enteringVar = step.tableau.varNames[step.pivotCol];
-      const leavingVar =
-        step.tableau.varNames[step.tableau.basis[step.pivotRow - 1]];
+      const enteringVar = toPdfVar(step.tableau.varNames[step.pivotCol]);
+      const leavingVar = toPdfVar(
+        step.tableau.varNames[step.tableau.basis[step.pivotRow - 1]],
+      );
       y = bodyText(`Entering Variable: ${enteringVar}`, y, 18);
       y = bodyText(`Leaving Variable: ${leavingVar}`, y, 18);
       y += 2;
